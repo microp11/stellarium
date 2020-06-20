@@ -58,9 +58,13 @@ private slots:
 	void showConfiguration();
 
 	//! reads the fields and slews a telescope
-	void slew();
+    void slew();
+    void slew(const Vec2f &azel);
 	//! reads the fields and sync a telescope
 	void sync();
+
+    //! continously slew every one second if checkbox checked
+    void autoslew(bool checked);
 
 	void addTelescope(int slot, QString name);
 	void removeTelescope(int slot);
@@ -109,6 +113,12 @@ private:
 	StoredPointsDialog * storedPointsDialog = Q_NULLPTR;
 	QHash<QString, int> connectedSlotsByName;
 	QVariantMap storedPointsDescriptions;
+
+    int timerId = 0;
+
+protected:
+    void timerEvent(QTimerEvent *event);
+
 };
 
 #endif // SLEWDIALOG_HPP

@@ -71,7 +71,9 @@ void SlewDialog::createDialogContent()
 	connect(ui->radioButtonDecimal, SIGNAL(toggled(bool)), this, SLOT(setFormatDecimal(bool)));
 
 	connect(ui->pushButtonSlew, SIGNAL(clicked()), this, SLOT(slew()));
-	connect(ui->pushButtonSync, SIGNAL(clicked()), this, SLOT(sync()));
+
+    connect(ui->checkBoxAutoSlew, SIGNAL(clicked(bool)), this, SLOT(autoslew(bool)));
+    connect(ui->pushButtonSync, SIGNAL(clicked()), this, SLOT(sync()));
 	connect(ui->pushButtonConfigure, SIGNAL(clicked()), this, SLOT(showConfiguration()));
 
 	connect(telescopeManager, SIGNAL(clientConnected(int, QString)), this, SLOT(addTelescope(int, QString)));
@@ -224,6 +226,50 @@ void SlewDialog::slew()
 	telescope->telescopeGoto(targetPosition, selectObject);
 }
 
+void SlewDialog::slew(const Vec2f &azel)
+{
+    double radiansRA  = ui->spinBoxRA->valueRadians();
+    double radiansDec = ui->spinBoxDec->valueRadians();
+
+    Vec3d targetPosition;
+    StelUtils::spheToRect(radiansRA, radiansDec, targetPosition);
+
+    auto telescope = currentTelescope();
+    if (!telescope)
+        return;
+
+    StelObjectP selectObject = Q_NULLPTR;
+    telescope->telescopeGoto(targetPosition, selectObject, azel);
+}
+
+void SlewDialog::autoslew(bool checked)
+{
+    Q_UNUSED(checked)
+
+    if (timerId > 0)
+    {
+        killTimer(timerId);
+        timerId = 0;
+    }
+    else
+    {
+        timerId = startTimer(1000);
+    }
+}
+
+void SlewDialog::timerEvent(QTimerEvent *event)
+{
+    qDebug() << event->timerId();
+    if (ui->checkBoxAutoSlew->isChecked()) {
+        getCurrentObjectInfo();
+
+        Vec2f v_azel;
+        v_azel.set(ui->azimuthDegreesDoubleSpinBox->value(), ui->elevationDegreesDoubleSpinBox->value());
+        slew(v_azel);
+    }
+}
+
+
 void SlewDialog::sync()
 {
 	double radiansRA  = ui->spinBoxRA->valueRadians();
@@ -246,9 +292,50 @@ void SlewDialog::getCurrentObjectInfo()
 	if (!selected.isEmpty()) {
 		double dec_j2000 = 0;
 		double ra_j2000 = 0;
-		StelUtils::rectToSphe(&ra_j2000,&dec_j2000,selected[0]->getJ2000EquatorialPos(StelApp::getInstance().getCore()));
+        StelUtils::rectToSphe(&ra_j2000, &dec_j2000, selected[0]->getJ2000EquatorialPos(StelApp::getInstance().getCore()));
 		ui->spinBoxRA->setRadians(ra_j2000);
 		ui->spinBoxDec->setRadians(dec_j2000);
+
+        double az = 0;
+        double alt = 0;
+        double az_degrees = 0;
+        bool az_sign = false;
+        double el_degrees = 0;
+        bool el_sign = false;
+
+        StelUtils::rectToSphe(&az, &alt, selected[0]->getAltAzPosGeometric(StelApp::getInstance().getCore()));
+        qDebug() << az;
+
+        double direction = 3.; // N is zero, E is 90 degrees
+        if (StelApp::getInstance().getFlagSouthAzimuthUsage())
+            direction = 2.;
+        az = direction*M_PI - az;
+        if (az > M_PI*2)
+            az -= M_PI*2;
+
+        double az_app, alt_app;
+        StelUtils::rectToSphe(&az_app,&alt_app,selected[0]->getAltAzPosApparent(StelApp::getInstance().getCore()));
+
+        QString res, firstCoordinate, secondCoordinate;
+
+        if (StelApp::getInstance().getCore()->getSkyDrawer()->getFlagHasAtmosphere() && (alt_app>-2.0*M_PI/180.0)) // Don't show refracted altitude much below horizon where model is meaningless.
+        {
+            //we only need az/dec with decimal degrees
+            StelUtils::radToDecDeg(az, az_sign, az_degrees);
+            StelUtils::radToDecDeg(alt_app, el_sign, el_degrees);
+            firstCoordinate  = StelUtils::radToDecDegStr(az);
+            secondCoordinate = StelUtils::radToDecDegStr(alt_app);
+        }
+        else
+        {
+            StelUtils::radToDecDeg(az, az_sign, az_degrees);
+            StelUtils::radToDecDeg(alt, el_sign, el_degrees);
+            firstCoordinate  = StelUtils::radToDecDegStr(az);
+            secondCoordinate = StelUtils::radToDecDegStr(alt);
+        }
+
+        az_sign?ui->azimuthDegreesDoubleSpinBox->setValue(az_degrees):ui->azimuthDegreesDoubleSpinBox->setValue(-az_degrees);
+        el_sign?ui->elevationDegreesDoubleSpinBox->setValue(el_degrees):ui->elevationDegreesDoubleSpinBox->setValue(-el_degrees);
 	}
 }
 

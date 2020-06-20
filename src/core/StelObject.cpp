@@ -380,7 +380,7 @@ QString StelObject::getCommonInfoString(const StelCore *core, const InfoStringGr
 		double az,alt;
 		StelUtils::rectToSphe(&az,&alt,getAltAzPosGeometric(core));
 		double direction = 3.; // N is zero, E is 90 degrees
-		if (useSouthAzimuth)
+        if (useSouthAzimuth)
 			direction = 2.;
 		az = direction*M_PI - az;
 		if (az > M_PI*2)
