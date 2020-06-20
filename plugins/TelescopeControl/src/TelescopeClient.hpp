@@ -80,7 +80,8 @@ public:
 		
 	// Methods specific to telescope
 	virtual void telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject) = 0;
-	virtual void telescopeSync(const Vec3d &j2000Pos, StelObjectP selectObject) = 0;
+    virtual void telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject, const Vec2f &azel);
+    virtual void telescopeSync(const Vec3d &j2000Pos, StelObjectP selectObject) = 0;
 	virtual void telescopeAbortSlew() {};
 
 	//!
@@ -147,7 +148,7 @@ public:
 			XYZ = desired_pos;
 		return true;
 	}
-	void telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject)
+    void telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject)
 	{
 		Q_UNUSED(selectObject)
 		desired_pos = j2000Pos;
@@ -197,6 +198,7 @@ private:
 	bool prepareCommunication();
 	void performCommunication();
 	void telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject);
+    void telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject, const Vec2f &azel);
 	void telescopeSync(const Vec3d &j2000Pos, StelObjectP selectObject);
 	bool isInitialized(void) const
 	{

@@ -160,6 +160,14 @@ void TelescopeClient::move(double angle, double speed)
 	qDebug() << "TelescopeClient::move not implemented";
 }
 
+void TelescopeClient::telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject, const Vec2f &azel)
+{
+    Q_UNUSED(j2000Pos)
+    Q_UNUSED(selectObject)
+    Q_UNUSED(azel)
+    qDebug() << "TelescopeClient::telescopeGoto not implemented";
+}
+
 //! returns the current system time in microseconds since the Epoch
 //! Prior to revision 6308, it was necessary to put put this method in an
 //! #ifdef block, as duplicate function definition caused errors during static
@@ -341,6 +349,114 @@ void TelescopeTCP::telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject
 	{
 		qDebug() << "TelescopeTCP(" << name << ")::telescopeGoto: "<< "communication is too slow, I will ignore this command";
 	}
+}
+
+//! queues a GOTO command with the specified position to the write buffer.
+//! For the data format of the command see the
+//! "Stellarium telescope control protocol" text file
+//!
+//! Modified version, can be made better
+void TelescopeTCP::telescopeGoto(const Vec3d &j2000Pos, StelObjectP selectObject, const Vec2f &azel)
+{
+    Q_UNUSED(selectObject)
+
+    qDebug() << azel[0];
+    qDebug() << azel[1];
+
+    if (!isConnected())
+        return;
+
+    Vec3d position = j2000Pos;
+    if (equinox == EquinoxJNow)
+    {
+        const StelCore* core = StelApp::getInstance().getCore();
+        position = core->j2000ToEquinoxEqu(j2000Pos, StelCore::RefractionOff);
+    }
+
+    if (writeBufferEnd - writeBuffer + 28 < static_cast<int>(sizeof(writeBuffer)))
+    {
+        const double ra_signed = atan2(position[1], position[0]);
+        //Workaround for the discrepancy in precision between Windows/Linux/PPC Macs and Intel Macs:
+        const double ra = (ra_signed >= 0) ? ra_signed : (ra_signed + 2.0 * M_PI);
+        const double dec = atan2(position[2], std::sqrt(position[0]*position[0]+position[1]*position[1]));
+        unsigned int ra_int = static_cast<unsigned int>(floor(0.5 + ra*((static_cast<unsigned int>(0x80000000))/M_PI)));
+        int dec_int = static_cast<int>(floor(0.5 + dec*((static_cast<unsigned int>(0x80000000))/M_PI)));
+        // length of packet:
+        *writeBufferEnd++ = 28;
+        *writeBufferEnd++ = 0;
+        // type of packet:
+        *writeBufferEnd++ = 0;
+        *writeBufferEnd++ = 0;
+        // client_micros:
+        qint64 now = getNow();
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+        now>>=8;
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+        now>>=8;
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+        now>>=8;
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+        now>>=8;
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+        now>>=8;
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+        now>>=8;
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+        now>>=8;
+        *writeBufferEnd++ = static_cast<char>(now & 0xFF);
+
+        // ra:
+        *writeBufferEnd++ = static_cast<char>(ra_int & 0xFF);
+        ra_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(ra_int & 0xFF);
+        ra_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(ra_int & 0xFF);
+        ra_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(ra_int & 0xFF);
+
+        // dec:
+        *writeBufferEnd++ = static_cast<char>(dec_int & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(dec_int & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(dec_int & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(dec_int & 0xFF);
+
+        // az:
+        float az = azel[0];
+        unsigned char const * const az_array = (unsigned char const *)&az;
+        for (size_t i = 0; i != sizeof az; ++i)
+        {
+            qDebug() << az_array[i];
+        }
+        *writeBufferEnd++ = static_cast<char>(az_array[0] & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(az_array[1] & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(az_array[2] & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(az_array[3] & 0xFF);
+
+        // el:
+        float el = azel[1];
+        unsigned char const * const el_array = (unsigned char const *)&el;
+        for (size_t i = 0; i != sizeof el; ++i)
+        {
+            qDebug() << el_array[i];
+        }
+        *writeBufferEnd++ = static_cast<char>(el_array[0] & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(el_array[1] & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(el_array[2] & 0xFF);
+        dec_int>>=8;
+        *writeBufferEnd++ = static_cast<char>(el_array[3] & 0xFF);
+    }
+    else
+    {
+        qDebug() << "TelescopeTCP(" << name << ")::telescopeGoto: "<< "communication is too slow, I will ignore this command";
+    }
 }
 
 void TelescopeTCP::telescopeSync(const Vec3d &j2000Pos, StelObjectP selectObject)
